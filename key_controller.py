@@ -3,6 +3,7 @@ This script demonstrates how to use the Mediapipe Pose model to detect human pos
 """
 
 import cv2
+import numpy as np
 import mediapipe as mp
 from xgb import normalize_landmarks_np
 import time
@@ -39,8 +40,6 @@ def press_key(key):
 POSE = {'pushup': 0, 'stand': 1}
 POSE_R = {0: 'pushup', 1: 'stand'}
 
-import numpy as np
-import math
 
 
 def get_pos(landmarks, name):
@@ -120,7 +119,7 @@ def calculate_angle(a, b, c):
     return angle
 
 
-class controller:
+class Controller:
     """
     Class to control the key press based on the pose detected
     """
@@ -155,7 +154,7 @@ class controller:
         :return: Pose landmarks data
         """
         data = np.zeros((33, 3))
-        if results.pose_landmarks:
+        if landmarks:
             for idx, landmark in enumerate(landmarks.landmark):
                 data[idx, 0] = landmark.x
                 data[idx, 1] = landmark.y
@@ -456,17 +455,17 @@ class controller:
 
 if __name__ == '__main__':
     # Initialize webcam capturea
-    vid = cv2.VideoCapture(1)  # Open the default camera (usually the built-in webcam)
+    vid = cv2.VideoCapture(0)  # Open the default camera (usually the built-in webcam)
     vid.set(3, 640)  # Set the width of the video frame to 640 pixels
     vid.set(4, 480)  # Set the height of the video frame to 480 pixels
-    video_path = r'D:\python\BN6206\videos\pushup\datas\2.mp4'  # Replace with your video file path
-    # vid = cv2.VideoCapture(video_path)  # Open the video file
+    # video_path = r'D:\python\BN6206\videos\pushup\datas\2.mp4'  # Replace with your video file path
+    # cap = cv2.VideoCapture(video_path)  # Open the video file
     # Initialize Mediapipe Pose solution and drawing utilities
     mp_pose = mp.solutions.pose  # Mediapipe Pose model
     mp_drawing = mp.solutions.drawing_utils  # Utility for drawing landmarks
     mp_drawing_styles = mp.solutions.drawing_styles  # Pre-defined drawing styles for pose landmarks
 
-    controller = controller()
+    controller = Controller()
 
     with mp_pose.Pose(
             static_image_mode=False,  # Set to False for video processing (real-time detection)
