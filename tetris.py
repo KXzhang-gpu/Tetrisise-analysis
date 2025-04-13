@@ -1,6 +1,14 @@
+# -*- coding: UTF-8 -*-
+import time
+
+import cv2
 import pygame
 import random
 import os
+
+from camera_surface import CameraSurface
+from chart_surface import ChartSurface
+from analysis import get_joint_angles, calculate_energy
 
 """
 10 x 20 square grid
@@ -8,22 +16,47 @@ shapes: S, Z, I, O, J, L, T
 represented in order by 0 - 6
 """
 
+# Initialize the game engine
+pygame.init()
 
-
-pygame.font.init()
-
-# GLOBALS VARS
-s_width = 800
-s_height = 700
-play_width = 300  # meaning 300 // 10 = 30 width per block
-play_height = 600  # meaning 600 // 20 = 20 height per blo ck
+# Sizes and locations
+s_width = 1400
+s_height = 750
+grid_width = 300  # meaning 300 // 10 = 30 width per block
+grid_height = 600  # meaning 600 // 20 = 20 height per block
 block_size = 30
 
-top_left_x = 100
-top_left_y = s_height - play_height
+grid_pos_x = s_width - grid_width - 540
+grid_pos_y = s_height - grid_height - 20
+
+# Define some colors
+BLACK = (0, 0, 0)
+WHITE = (255, 255, 255)
+GRAY = (128, 128, 128)
+BEIGE = (247, 243, 239)
+
+# Initialize the screen
+screen = pygame.display.set_mode((s_width, s_height))
+pygame.display.set_caption('Tetris')
+
+# Initialize the surface components
+output_dir = './output'
+os.makedirs(output_dir, exist_ok=True)
+
+camera = CameraSurface(camera_index=0, camera_size=(200, 300))
+angle_charts = []
+joint_names = ['Left Arm', 'Right Arm', 'Knee', 'Hip']
+for i in range(4):
+    chart = ChartSurface(
+        size=(camera.capture.get(cv2.CAP_PROP_FRAME_WIDTH), 100),
+        ylim=(0, 180),
+        history=100,
+        title=f"{joint_names[i]} Angle",
+        save_file=os.path.join(output_dir ,f"{joint_names[i].replace(' ', '_')}_Angle.csv")
+    )
+    angle_charts.append(chart)
 
 # SHAPE FORMATS
-
 S = [['.....',
       '.....',
       '..00.',
@@ -71,8 +104,7 @@ O = [['.....',
       '.000.',
       '.000.',
       '.000.',
-      '.....']
-     ]
+      '.....']]
 
 J = [['.....',
       '.0...',
@@ -140,9 +172,30 @@ T = [['.....',
 shapes = [S, Z, I, O, J, L, T]
 shape_colors = [(0, 255, 0), (255, 0, 0), (0, 255, 255), (255, 255, 0), (255, 165, 0), (0, 0, 255), (128, 0, 128)]
 
+backgrounds = {
+    pygame.K_o: pygame.image.load("./game/Crunch.png").convert(),
+    pygame.K_j: pygame.image.load("./game/Rightpushup.png").convert(),
+    pygame.K_l: pygame.image.load("./game/Leftpushup.png").convert(),
+    pygame.K_s: pygame.image.load("./game/Rightsquat.png").convert(),
+    pygame.K_z: pygame.image.load("./game/Leftsquat.png").convert(),
+    pygame.K_t: pygame.image.load("./game/Overheadclap.png").convert(),
+    pygame.K_i: pygame.image.load("./game/Randomshape.png").convert(),
+}
 
-# index 0 - 6 represent shape
+exercise_counting = {
+    pygame.K_o: 0,
+    pygame.K_j: 0,
+    pygame.K_l: 0,
+    pygame.K_s: 0,
+    pygame.K_z: 0,
+    pygame.K_t: 0,
+    pygame.K_i: 0,
+}
 
+def update_exercise_counting(key):
+    global exercise_counting
+    if key in exercise_counting:
+        exercise_counting[key] += 1
 
 class Piece(object):
     rows = 20  # y
@@ -152,7 +205,7 @@ class Piece(object):
         self.x = column
         self.y = row
         self.shape = shape
-        self.color = shape_colors[shapes.index(shape)]
+        self.color = random.choice(shape_colors)
         self.rotation = 0  # number from 0-3
 
 
@@ -210,18 +263,32 @@ def get_shape():
     key = None
     get_times += 1
     mp = {pygame.K_s: S, pygame.K_z: Z, pygame.K_i: I, pygame.K_o: O, pygame.K_j: J, pygame.K_l: L, pygame.K_t: T}
+    is_random_round = False
     if get_times % 5 != 0:
         receive_key = False
         while not receive_key:
+            # insert camera controller
+            update_camera_and_chart()
+            pygame.display.update()
+
             for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    quit()
+
                 if event.type == pygame.KEYDOWN:
-                    if event.key in [pygame.K_s, pygame.K_z, pygame.K_i, pygame.K_o, pygame.K_j, pygame.K_l, pygame.K_t]:
+                    update_exercise_counting(event.key)
+
+                    if (event.key in [pygame.K_s, pygame.K_z, pygame.K_i,
+                                     pygame.K_o, pygame.K_j, pygame.K_l, pygame.K_t]
+                            and event.key != shape_key):
                         key = event.key
                         receive_key = True
                         break
     else:
+        is_random_round = True
         key = random.choice([pygame.K_s, pygame.K_z, pygame.K_i, pygame.K_o, pygame.K_j, pygame.K_l, pygame.K_t])
-    shape_key = key
+    shape_key = pygame.K_i if is_random_round else key
     # return Piece(5, 0, random.choice(shapes))
     return Piece(5, 0, mp[key])
 
@@ -229,21 +296,23 @@ def get_shape():
 
 def draw_text_middle(text, size, color, surface):
     font = pygame.font.SysFont('comicsans', size, bold=True)
-    label = font.render(text, 1, color)
+    text = font.render(text, 1, color)
 
-    surface.blit(label, (
-        250 + play_width / 2 - (label.get_width() / 2), 50))
+    text_rect = text.get_rect()
+    text_rect.centerx = surface.get_width() // 2
+
+    surface.blit(text, text_rect)
 
 
 def draw_grid(surface, row, col):
-    sx = top_left_x
-    sy = top_left_y
+    sx = grid_pos_x
+    sy = grid_pos_y
     for i in range(row):
         pygame.draw.line(surface, (128, 128, 128), (sx, sy + i * 30),
-                         (sx + play_width, sy + i * 30))  # horizontal lines
+                         (sx + grid_width, sy + i * 30))  # horizontal lines
         for j in range(col):
             pygame.draw.line(surface, (128, 128, 128), (sx + j * 30, sy),
-                             (sx + j * 30, sy + play_height))  # vertical lines
+                             (sx + j * 30, sy + grid_height))  # vertical lines
 
 
 def clear_rows(grid, locked):
@@ -273,8 +342,8 @@ def draw_next_shape(shape, surface):
     font = pygame.font.SysFont('comicsans', 30)
     label = font.render('Next Shape', 1, (255, 255, 255))
 
-    sx = top_left_x + play_width + 50
-    sy = top_left_y + play_height / 2 - 100
+    sx = grid_pos_x + grid_width + 50
+    sy = grid_pos_y + grid_height / 2 - 100
     format = shape.shape[shape.rotation % len(shape.shape)]
 
     for i, line in enumerate(format):
@@ -285,30 +354,38 @@ def draw_next_shape(shape, surface):
 
     surface.blit(label, (sx + 10, sy - 30))
 
-imp = None
-def draw_window(surface):
-    global imp
-    surface.fill((0, 0, 0))
-    # Tetris Title
-    font = pygame.font.SysFont('comicsans', 60)
-    label = font.render('TETRIS', 1, (255, 255, 255))
 
-    surface.blit(label, (top_left_x + play_width / 2 - (label.get_width() / 2), 30))
+def draw_window(surface, image_bg=None):
+    surface.fill(BEIGE)
+    if image_bg is None:
+        image_bg = backgrounds[pygame.K_i]
+    screen.blit(image_bg, (s_width - image_bg.get_width(), 0))
 
     for i in range(len(grid)):
         for j in range(len(grid[i])):
-            pygame.draw.rect(surface, grid[i][j], (top_left_x + j * 30, top_left_y + i * 30, 30, 30), 0)
+            pygame.draw.rect(surface, grid[i][j], (grid_pos_x + j * 30, grid_pos_y + i * 30, 30, 30), 0)
 
     # draw grid and border
     draw_grid(surface, 20, 10)
-    pygame.draw.rect(surface, (255, 0, 0), (top_left_x, top_left_y, play_width, play_height), 5)
+    pygame.draw.rect(surface, (255, 0, 0), (grid_pos_x, grid_pos_y, grid_width, grid_height), 5)
 
-    win.blit(imp, (425, 50))
+
     # pygame.display.update()
+
+def update_camera_and_chart():
+    cam_surface = camera.update()
+    if cam_surface:
+        screen.blit(cam_surface, (20, 20))
+    if camera.data is not None:
+        joint_angles = get_joint_angles(camera.data)
+        for i, chart in enumerate(angle_charts):
+            chart.update(joint_angles[i])
+            screen.blit(chart.surface, (20, cam_surface.get_height() + 40 + i * chart.height))
+            chart.draw()
 
 
 def main():
-    global grid, imp
+    global grid
 
     locked_positions = {}  # (x,y):(255,0,0)
     grid = create_grid(locked_positions)
@@ -320,6 +397,8 @@ def main():
     level_time = 0
     fall_speed = 1
     score = 0
+    energy_cost = 0
+    prev_time = time.time()
 
     while run:
 
@@ -348,6 +427,8 @@ def main():
                 quit()
 
             if event.type == pygame.KEYDOWN:
+                update_exercise_counting(event.key)
+
                 if event.key == pygame.K_a:
                     current_piece.x -= 1
                     if not valid_space(current_piece, grid):
@@ -358,6 +439,14 @@ def main():
                     if not valid_space(current_piece, grid):
                         current_piece.x -= 1
                 elif event.key == pygame.K_w or event.key == shape_key:
+                    # rotate shape
+                    current_piece.rotation = current_piece.rotation + 1 % len(current_piece.shape)
+                    if not valid_space(current_piece, grid):
+                        current_piece.rotation = current_piece.rotation - 1 % len(current_piece.shape)
+
+                elif (shape_key == pygame.K_i and
+                      event.key in [pygame.K_s, pygame.K_z, pygame.K_o, pygame.K_j, pygame.K_l, pygame.K_t]):
+
                     # rotate shape
                     current_piece.rotation = current_piece.rotation + 1 % len(current_piece.shape)
                     if not valid_space(current_piece, grid):
@@ -383,42 +472,58 @@ def main():
             if clear_rows(grid, locked_positions):
                 score += 10
 
-        draw_window(win)
-        # draw_next_shape(next_piece, win)
+        # update the game window
+        draw_window(screen, image_bg=backgrounds[shape_key])
+
+        # draw score and counting of exercise
+        energy_cost += calculate_energy(camera.controller, time.time() - prev_time)
+        prev_time = time.time()
+
+        font = pygame.font.SysFont('Calibri', 25, True, False)
+        score_label = font.render("Score: " + str(score), 1, BLACK)
+        pushup = font.render("Pushups: " + str(exercise_counting[pygame.K_l] + exercise_counting[pygame.K_j]),
+                             True, BLACK)
+        squat = font.render("Squats: " + str(exercise_counting[pygame.K_s] + exercise_counting[pygame.K_z]),
+                            True, BLACK)
+        overhead = font.render("Claps: " + str(exercise_counting[pygame.K_t]), True, BLACK)
+        crunch = font.render("Crunches: " + str(exercise_counting[pygame.K_o]), True, BLACK)
+        energy = font.render("Energy: " + f'{energy_cost: .1f}' + ' cal', True, GRAY)
+
+        screen.blit(score_label, (grid_pos_x - 150, grid_pos_y))
+        screen.blit(pushup, (grid_pos_x - 150, grid_pos_y + 30))
+        screen.blit(squat, (grid_pos_x - 150, grid_pos_y + 60))
+        screen.blit(overhead, (grid_pos_x - 150, grid_pos_y + 90))
+        screen.blit(crunch, (grid_pos_x - 150, grid_pos_y + 120))
+        screen.blit(energy, (grid_pos_x - 180, grid_pos_y + 150))
+
+
+        # update the charts and camera
+        update_camera_and_chart()
+
         pygame.display.update()
 
         # Check if user lost
         if check_lost(locked_positions):
             run = False
 
-    draw_text_middle("You Lost", 40, (255, 255, 255), win)
+    draw_text_middle("You Lost", 40, (255, 255, 255), screen)
     pygame.display.update()
     pygame.time.delay(2000)
 
 
 def main_menu():
-    global imp
     run = True
-    imp = pygame.image.load("./game/Exercises.png").convert()
+    image = pygame.image.load("./game/Exercises.png").convert()
     while run:
-        win.fill((0, 0, 0))
-        draw_text_middle('Do a exercise to start!', 60, (255, 255, 255), win)
-        win.blit(imp, (225, 200))
+        screen.fill(BEIGE)
+        draw_text_middle('Do a exercise!', 60, GRAY, screen)
+        screen.blit(image, image.get_rect(center = screen.get_rect().center))
+
         pygame.display.update()
-        """
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                run = False
-
-            if event.type == pygame.KEYDOWN:
-                main()
-        """
         main()
+
     pygame.quit()
+    camera.release()
 
-
-
-win = pygame.display.set_mode((s_width, s_height))
-pygame.display.set_caption('Tetris')
 
 main_menu()  # start game
