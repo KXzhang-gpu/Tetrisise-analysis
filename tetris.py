@@ -179,7 +179,7 @@ backgrounds = {
     pygame.K_s: pygame.image.load("./game/Rightsquat.png").convert(),
     pygame.K_z: pygame.image.load("./game/Leftsquat.png").convert(),
     pygame.K_t: pygame.image.load("./game/Overheadclap.png").convert(),
-    pygame.K_i: pygame.image.load("./game/Background.png").convert(),
+    pygame.K_i: pygame.image.load("./game/Randomshape.png").convert(),
 }
 
 exercise_counting = {
@@ -205,7 +205,7 @@ class Piece(object):
         self.x = column
         self.y = row
         self.shape = shape
-        self.color = shape_colors[shapes.index(shape)]
+        self.color = random.choice(shape_colors)
         self.rotation = 0  # number from 0-3
 
 
@@ -263,6 +263,7 @@ def get_shape():
     key = None
     get_times += 1
     mp = {pygame.K_s: S, pygame.K_z: Z, pygame.K_i: I, pygame.K_o: O, pygame.K_j: J, pygame.K_l: L, pygame.K_t: T}
+    is_random_round = False
     if get_times % 5 != 0:
         receive_key = False
         while not receive_key:
@@ -285,8 +286,9 @@ def get_shape():
                         receive_key = True
                         break
     else:
+        is_random_round = True
         key = random.choice([pygame.K_s, pygame.K_z, pygame.K_i, pygame.K_o, pygame.K_j, pygame.K_l, pygame.K_t])
-    shape_key = key
+    shape_key = pygame.K_i if is_random_round else key
     # return Piece(5, 0, random.choice(shapes))
     return Piece(5, 0, mp[key])
 
