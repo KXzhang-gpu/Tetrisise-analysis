@@ -43,12 +43,12 @@ pygame.display.set_caption('Tetris')
 output_dir = './output'
 os.makedirs(output_dir, exist_ok=True)
 
-camera = CameraSurface(camera_index=0, camera_size=(200, 300))
+camera = CameraSurface(camera_index=0, camera_size=(300, 169))
 angle_charts = []
 joint_names = ['Left Arm', 'Right Arm', 'Knee', 'Hip']
 for i in range(4):
     chart = ChartSurface(
-        size=(camera.capture.get(cv2.CAP_PROP_FRAME_WIDTH), 100),
+        size=(300, 100),
         ylim=(0, 180),
         history=100,
         title=f"{joint_names[i]} Angle",
@@ -374,6 +374,7 @@ def draw_window(surface, image_bg=None):
 
 def update_camera_and_chart():
     cam_surface = camera.update()
+
     if cam_surface:
         screen.blit(cam_surface, (20, 20))
     if camera.data is not None:

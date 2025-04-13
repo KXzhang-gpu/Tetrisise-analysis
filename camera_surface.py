@@ -29,6 +29,7 @@ class CameraSurface:
         # Initialize pose model
         self.pose_model = pose_model
         self.controller = controller
+        self.camera_size = camera_size
         self.data = None
 
 
@@ -53,7 +54,10 @@ class CameraSurface:
 
         frame = cv2.flip(frame, 1)
         # Convert the frame to a Pygame surface
+        frame = cv2.resize(frame, self.camera_size)
         frame_surface = pygame.image.frombuffer(frame.tobytes(), frame.shape[1::-1], 'RGB')
+
+
         return frame_surface
 
     def release(self):
