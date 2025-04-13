@@ -323,7 +323,7 @@ def draw_grid(surface, row, col):
 
 def clear_rows(grid, locked):
     # need to see if row is clear the shift every other row above down one
-
+    flag = False
     inc = 0
     for i in range(len(grid) - 1, -1, -1):
         row = grid[i]
@@ -334,6 +334,7 @@ def clear_rows(grid, locked):
             for j in range(len(row)):
                 try:
                     del locked[(j, i)]
+                    flag = True
                 except:
                     continue
     if inc > 0:
@@ -342,6 +343,8 @@ def clear_rows(grid, locked):
             if y < ind:
                 newKey = (x, y + inc)
                 locked[newKey] = locked.pop(key)
+
+    return flag
 
 
 def draw_next_shape(shape, surface):

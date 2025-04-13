@@ -4,6 +4,4 @@
 
 ## Quick start
 
-run key_controller.py to start recognize the exercise(map exercise to the keyboard)
-
-and run tetris.py to start the game
+run tetris.py to start the game
