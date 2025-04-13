@@ -1,10 +1,13 @@
 # -*- coding: UTF-8 -*-
+import os
+import shutil
 import time
+import random
 
 import cv2
 import pygame
-import random
-import os
+import tkinter as tk
+from tkinter import filedialog, messagebox
 
 from camera_surface import CameraSurface
 from chart_surface import ChartSurface
@@ -55,6 +58,7 @@ for i in range(4):
         save_file=os.path.join(output_dir ,f"{joint_names[i].replace(' ', '_')}_Angle.csv")
     )
     angle_charts.append(chart)
+energy_cost = 0
 
 # SHAPE FORMATS
 S = [['.....',
@@ -294,12 +298,14 @@ def get_shape():
 
 
 
-def draw_text_middle(text, size, color, surface):
+def draw_text_middle(text, size, color, surface, all_center=False):
     font = pygame.font.SysFont('comicsans', size, bold=True)
     text = font.render(text, 1, color)
 
     text_rect = text.get_rect()
     text_rect.centerx = surface.get_width() // 2
+    if all_center:
+        text_rect.centery = surface.get_height() // 2
 
     surface.blit(text, text_rect)
 
@@ -384,8 +390,8 @@ def update_camera_and_chart():
             chart.draw()
 
 
-def main():
-    global grid
+def play_game():
+    global grid, energy_cost
 
     locked_positions = {}  # (x,y):(255,0,0)
     grid = create_grid(locked_positions)
@@ -427,6 +433,10 @@ def main():
                 quit()
 
             if event.type == pygame.KEYDOWN:
+                # todo del debug
+                if event.key == pygame.K_q:
+                    run = False
+
                 update_exercise_counting(event.key)
 
                 if event.key == pygame.K_a:
@@ -506,24 +516,60 @@ def main():
         if check_lost(locked_positions):
             run = False
 
-    draw_text_middle("You Lost", 40, (255, 255, 255), screen)
+    screen.fill(BEIGE)
+    draw_text_middle("You Lost", 100, BLACK, screen, all_center=True)
     pygame.display.update()
     pygame.time.delay(2000)
 
+def data_saving():
+    global energy_cost
+    # Create a Tkinter root window
+    root = tk.Tk()
+    root.withdraw()
+    root.update()
 
-def main_menu():
-    run = True
+    # Ask the user whether to save the data
+    should_save = messagebox.askyesno(title="You lost", message="Do you want to save the data?")
+
+    if should_save:
+        # file dialog to select save location
+        file_path = filedialog.askdirectory(
+            title="Data Saving",
+            initialdir=os.path.dirname(os.path.abspath(__file__)),
+        )
+
+        if file_path:
+            # Saving the angle datas
+            for angle_chart in angle_charts:
+                src_path = angle_chart.save_file
+                if src_path:
+                    dst_path = os.path.join(file_path, os.path.basename(src_path))
+                    shutil.move(src_path, dst_path)
+            # Saving the exercise counting
+            exercise_counting_file = os.path.join(file_path, "exercise_counting.txt")
+            with open(exercise_counting_file, 'w') as f:
+                f.write(f"Pushups: {exercise_counting[pygame.K_l] + exercise_counting[pygame.K_j]}\n")
+                f.write(f"Squats: {exercise_counting[pygame.K_s] + exercise_counting[pygame.K_z]}\n")
+                f.write(f"Claps: {exercise_counting[pygame.K_t]}\n")
+                f.write(f"Crunches: {exercise_counting[pygame.K_o]}\n")
+                f.write(f"Energy Cost: {energy_cost: .3f} kcal\n")
+
+    root.destroy()
+
+
+def main():
     image = pygame.image.load("./game/Exercises.png").convert()
-    while run:
-        screen.fill(BEIGE)
-        draw_text_middle('Do a exercise!', 60, GRAY, screen)
-        screen.blit(image, image.get_rect(center = screen.get_rect().center))
+    screen.fill(BEIGE)
+    draw_text_middle('Do a exercise!', 60, GRAY, screen)
+    screen.blit(image, image.get_rect(center = screen.get_rect().center))
 
-        pygame.display.update()
-        main()
+    pygame.display.update()
+    play_game()
+
+    data_saving()
 
     pygame.quit()
     camera.release()
 
 
-main_menu()  # start game
+main()  # start game
