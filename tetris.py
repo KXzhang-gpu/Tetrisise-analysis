@@ -51,7 +51,7 @@ for i in range(4):
         size=(camera.capture.get(cv2.CAP_PROP_FRAME_WIDTH), 100),
         ylim=(0, 180),
         history=100,
-        title=f"{joint_names[i] }Angle",
+        title=f"{joint_names[i]} Angle",
         save_file=os.path.join(output_dir ,f"{joint_names[i].replace(' ', '_')}_Angle.csv")
     )
     angle_charts.append(chart)
