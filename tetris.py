@@ -501,7 +501,7 @@ def play_game():
                             True, BLACK)
         overhead = font.render("Claps: " + str(exercise_counting[pygame.K_t]), True, BLACK)
         crunch = font.render("Crunches: " + str(exercise_counting[pygame.K_o]), True, BLACK)
-        energy = font.render("Energy: " + f'{energy_cost: .1f}' + ' cal', True, GRAY)
+        energy = font.render("Energy: " + f'{energy_cost: .1f}' + ' kcal', True, GRAY)
 
         screen.blit(score_label, (grid_pos_x - 150, grid_pos_y))
         screen.blit(pushup, (grid_pos_x - 150, grid_pos_y + 30))
